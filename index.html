@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>היסטוריית התרעות</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Arial, sans-serif; background: #f5f5f5; min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+h1 { margin-bottom: 20px; color: #333; }
+
+.controls { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.control-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.control-group { display: flex; flex-direction: column; gap: 4px; }
+.control-group label { font-size: 13px; color: #666; }
+
+#region-input {
+  width: 300px;
+  padding: 10px 12px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+#region-input:focus { outline: none; border-color: #007bff; }
+
+.autocomplete-container { position: relative; }
+#autocomplete-list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  background: white;
+  border: 1px solid #ccc;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+#autocomplete-list.visible { display: block; }
+.autocomplete-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+.autocomplete-item:hover, .autocomplete-item.selected { background: #f0f0f0; }
+.autocomplete-item:last-child { border-bottom: none; }
+
+#selected-regions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.region-tag {
+  background: #007bff;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.region-tag button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.8;
+}
+.region-tag button:hover { opacity: 1; }
+
+select, button {
+  padding: 10px 16px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+button { background: #007bff; color: white; border-color: #007bff; }
+button:hover { background: #0056b3; }
+button:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; }
+
+.charts { display: grid; gap: 20px; }
+.chart-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.chart-container h2 { margin-bottom: 16px; font-size: 18px; color: #333; }
+canvas { max-height: 400px; }
+
+.loading { text-align: center; padding: 40px; color: #666; }
+.error { background: #fee; color: #c00; padding: 12px; border-radius: 6px; margin-bottom: 20px; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: center;
+}
+.stat-card .value { font-size: 28px; font-weight: bold; color: #007bff; }
+.stat-card .label { font-size: 13px; color: #666; margin-top: 4px; }
+
+.heatmap { overflow-x: auto; }
+.heatmap table { border-collapse: collapse; font-size: 11px; direction: ltr; width: 100%; }
+.heatmap th, .heatmap td { padding: 2px; text-align: center; }
+.heatmap th { background: #f5f5f5; font-weight: normal; color: #666; }
+.heatmap .row-label { text-align: right; padding-right: 8px; font-family: monospace; white-space: nowrap; }
+.heatmap td.cell { border: 1px solid #ddd; height: 28px; min-width: 32px; position: relative; }
+.heatmap .night { background: #f0f0f8; }
+.heatmap .legend { margin-bottom: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+.heatmap .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.heatmap .legend-color { width: 16px; height: 16px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>היסטוריית התרעות</h1>
+
+  <div class="controls">
+    <div class="control-row">
+      <div class="control-group autocomplete-container">
+        <label>הוסף אזור</label>
+        <input type="text" id="region-input" placeholder="הקלד שם יישוב...">
+        <div id="autocomplete-list"></div>
+      </div>
+            <div class="control-group">
+        <label>טווח זמן</label>
+        <select id="time-range">
+          <option value="7">שבוע אחרון</option>
+          <option value="14">שבועיים</option>
+          <option value="30">חודש</option>
+          <option value="0">הכל</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>קיבוץ לפי</label>
+        <select id="group-by">
+          <option value="day">יומי</option>
+          <option value="hour">שעתי</option>
+          <option value="heatmap">מפת חום</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>&nbsp;</label>
+        <button id="refresh-btn">רענן נתונים</button>
+      </div>
+    </div>
+    <div id="selected-regions"></div>
+  </div>
+
+  <div id="error" class="error" style="display:none;"></div>
+
+  <div class="stats" id="stats" style="display:none;">
+    <div class="stat-card">
+      <div class="value" id="stat-total">0</div>
+      <div class="label">סה"כ התרעות</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-days">0</div>
+      <div class="label">ימים עם התרעות</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-peak">0</div>
+      <div class="label">שיא ביום אחד</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-avg">0</div>
+      <div class="label">ממוצע ליום</div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-container" id="chart-wrapper">
+      <h2 id="chart-title">התרעות לפי יום</h2>
+      <canvas id="main-chart"></canvas>
+    </div>
+    <div class="chart-container" id="heatmap-wrapper" style="display:none;">
+      <h2 id="heatmap-title">מפת חום - ימים × שעות</h2>
+      <div id="heatmap" class="heatmap"></div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">טוען נתונים...</div>
+
+  <footer style="margin-top:32px;padding-top:16px;border-top:1px solid #ddd;font-size:12px;color:#888;text-align:center;">
+    נתונים מ-<a href="https://oref-map.org" target="_blank" style="color:#666;">oref-map.org</a> ·
+    מקור: <a href="https://www.oref.org.il" target="_blank" style="color:#666;">פיקוד העורף</a>
+    <br>
+    נוצר עם Claude Code ע"י <a href="https://backslasher.net" target="_blank" style="color:#666;">Backslasher (\)</a>
+  </footer>
+</div>
+
+<script>
+// Day files to load (Feb 28 - Mar 23, 2026)
+const DAY_FILES = [
+  'day-2026-02-28.json',
+  'day-2026-03-01.json',
+  'day-2026-03-02.json',
+  'day-2026-03-03.json',
+  'day-2026-03-04.json',
+  'day-2026-03-05.json',
+  'day-2026-03-06.json',
+  'day-2026-03-07.json',
+  'day-2026-03-08.json',
+  'day-2026-03-09.json',
+  'day-2026-03-10.json',
+  'day-2026-03-11.json',
+  'day-2026-03-12.json',
+  'day-2026-03-13.json',
+  'day-2026-03-14.json',
+  'day-2026-03-15.json',
+  'day-2026-03-16.json',
+  'day-2026-03-17.json',
+  'day-2026-03-18.json',
+  'day-2026-03-19.json',
+  'day-2026-03-20.json',
+  'day-2026-03-21.json',
+  'day-2026-03-22.json',
+  'day-2026-03-23.json',
+];
+
+let allData = [];
+let allLocations = [];
+let selectedRegions = new Set();
+let mainChart = null;
+let autocompleteIndex = -1;
+
+// Fetch and combine all day files
+async function fetchData() {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('error').style.display = 'none';
+
+  try {
+    const responses = await Promise.all(DAY_FILES.map(f => fetch(f).then(r => r.json())));
+    const combined = responses.flat();
+
+    // Dedupe by rid
+    const seen = new Set();
+    const deduped = combined.filter(r => {
+      if (seen.has(r.rid)) return false;
+      seen.add(r.rid);
+      return true;
+    });
+
+    // Only include actual alerts (rockets, drones)
+    const INCLUDE_TYPES = ['ירי רקטות וטילים', 'חדירת כלי טיס עוין'];
+    const filtered = deduped.filter(d => INCLUDE_TYPES.includes(d.category_desc));
+
+    // Group alerts within 10 min for same location into single event
+    allData = groupNearbyAlerts(filtered, 10);
+
+    // Extract unique locations
+    allLocations = [...new Set(allData.map(d => d.data))].sort((a, b) => a.localeCompare(b, 'he'));
+
+    document.getElementById('loading').style.display = 'none';
+    updateChart();
+  } catch (err) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').textContent = `שגיאה בטעינת נתונים: ${err.message}`;
+    document.getElementById('error').style.display = 'block';
+  }
+}
+
+// Group data by day or hour
+function groupData(data, groupBy) {
+  const groups = {};
+
+  data.forEach(item => {
+    const date = new Date(item.alertDate);
+    let key;
+
+    if (groupBy === 'day') {
+      key = date.toISOString().split('T')[0];
+    } else {
+      // day + hour: "2026-03-20 14:00"
+      const day = date.toISOString().split('T')[0];
+      const hour = date.getHours().toString().padStart(2, '0');
+      key = `${day} ${hour}:00`;
+    }
+
+    groups[key] = (groups[key] || 0) + 1;
+  });
+
+  return groups;
+}
+
+// Color palette for lines
+const COLORS = [
+  { border: 'rgb(220, 53, 69)', bg: 'rgba(220, 53, 69, 0.1)' },
+  { border: 'rgb(0, 123, 255)', bg: 'rgba(0, 123, 255, 0.1)' },
+  { border: 'rgb(40, 167, 69)', bg: 'rgba(40, 167, 69, 0.1)' },
+  { border: 'rgb(255, 193, 7)', bg: 'rgba(255, 193, 7, 0.1)' },
+  { border: 'rgb(111, 66, 193)', bg: 'rgba(111, 66, 193, 0.1)' },
+  { border: 'rgb(23, 162, 184)', bg: 'rgba(23, 162, 184, 0.1)' },
+  { border: 'rgb(253, 126, 20)', bg: 'rgba(253, 126, 20, 0.1)' },
+  { border: 'rgb(102, 16, 242)', bg: 'rgba(102, 16, 242, 0.1)' },
+];
+
+// Group alerts within N minutes for same location into single event
+function groupNearbyAlerts(data, minutesThreshold) {
+  // Sort by location then time
+  const sorted = [...data].sort((a, b) => {
+    if (a.data !== b.data) return a.data.localeCompare(b.data);
+    return new Date(a.alertDate) - new Date(b.alertDate);
+  });
+
+  const result = [];
+  let lastByLocation = {};
+
+  sorted.forEach(alert => {
+    const loc = alert.data;
+    const time = new Date(alert.alertDate).getTime();
+    const last = lastByLocation[loc];
+
+    if (!last || (time - last.time) > minutesThreshold * 60 * 1000) {
+      // New event group - keep this alert
+      result.push(alert);
+      lastByLocation[loc] = { time, alert };
+    }
+    // Otherwise skip - within threshold of previous alert for this location
+  });
+
+  return result;
+}
+
+// Render heatmap (days × hours) with multi-region support
+function renderHeatmap(data) {
+  const regions = selectedRegions.size > 0 ? [...selectedRegions] : ['all'];
+  const isMulti = regions.length > 1 && regions[0] !== 'all';
+
+  // Group by region, day, hour
+  const grids = {}; // { region: { 'YYYY-MM-DD': { 0: count, ... } } }
+  const allDays = new Set();
+
+  regions.forEach(r => { grids[r] = {}; });
+
+  data.forEach(d => {
+    const date = new Date(d.alertDate);
+    const day = date.toISOString().split('T')[0];
+    const hour = date.getHours();
+    allDays.add(day);
+
+    const r = regions[0] === 'all' ? 'all' : d.data;
+    if (!grids[r]) return;
+    if (!grids[r][day]) grids[r][day] = {};
+    grids[r][day][hour] = (grids[r][day][hour] || 0) + 1;
+  });
+
+  const days = [...allDays].sort();
+  if (days.length === 0) {
+    document.getElementById('heatmap').innerHTML = '<p>אין נתונים</p>';
+    return;
+  }
+
+  // Find max per region for color scaling
+  const maxes = {};
+  regions.forEach(r => {
+    maxes[r] = 0;
+    days.forEach(day => {
+      for (let h = 0; h < 24; h++) {
+        maxes[r] = Math.max(maxes[r], grids[r][day]?.[h] || 0);
+      }
+    });
+  });
+
+  // Legend for multi-region
+  let html = '';
+  if (isMulti) {
+    html += '<div class="legend">';
+    regions.forEach((r, i) => {
+      const color = COLORS[i % COLORS.length].border;
+      html += `<div class="legend-item"><div class="legend-color" style="background:${color}"></div>${r}</div>`;
+    });
+    html += '</div>';
+  }
+
+  // Build table
+  html += '<table><thead><tr><th></th>';
+  for (let h = 0; h < 24; h++) {
+    html += `<th>${h}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  days.forEach(day => {
+    const shortDay = day.slice(5); // MM-DD
+    html += `<tr><th class="row-label">${shortDay}</th>`;
+    for (let h = 0; h < 24; h++) {
+      const isNight = h < 6 || h >= 18;
+      const nightClass = isNight ? ' night' : '';
+
+      if (isMulti && regions.length === 2) {
+        // Diagonal split for 2 regions
+        const c0 = grids[regions[0]][day]?.[h] || 0;
+        const c1 = grids[regions[1]][day]?.[h] || 0;
+        const i0 = maxes[regions[0]] > 0 ? c0 / maxes[regions[0]] : 0;
+        const i1 = maxes[regions[1]] > 0 ? c1 / maxes[regions[1]] : 0;
+        const col0 = COLORS[0].border.replace('rgb', 'rgba').replace(')', `, ${0.15 + i0 * 0.85})`);
+        const col1 = COLORS[1].border.replace('rgb', 'rgba').replace(')', `, ${0.15 + i1 * 0.85})`);
+        const bg0 = c0 > 0 ? col0 : (isNight ? '#f0f0f8' : '#fff');
+        const bg1 = c1 > 0 ? col1 : (isNight ? '#f0f0f8' : '#fff');
+        const grad = `linear-gradient(135deg, ${bg0} 50%, ${bg1} 50%)`;
+        const text = (c0 || c1) ? `<span style="position:absolute;top:1px;left:2px;font-size:9px">${c0||''}</span><span style="position:absolute;bottom:1px;right:2px;font-size:9px">${c1||''}</span>` : '';
+        html += `<td class="cell" style="background:${grad}">${text}</td>`;
+      } else {
+        // Single region or all
+        const r = regions[0];
+        const count = grids[r][day]?.[h] || 0;
+        const intensity = maxes[r] > 0 ? count / maxes[r] : 0;
+        const bg = count > 0
+          ? `rgba(220, 53, 69, ${0.2 + intensity * 0.8})`
+          : '';
+        const style = bg ? `background:${bg};color:${intensity > 0.5 ? '#fff' : '#333'}` : '';
+        html += `<td class="cell${nightClass}" style="${style}">${count || ''}</td>`;
+      }
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('heatmap').innerHTML = html;
+}
+
+// Generate night/day annotations for hourly view
+function generateDayNightAnnotations(labels, groupBy) {
+  if (groupBy === 'day') return {};
+
+  const annotations = {};
+  let nightStart = null;
+
+  labels.forEach((label, i) => {
+    const hour = parseInt(label.split(' ')[1]?.split(':')[0] || '12');
+    const isNight = hour < 6 || hour >= 18;
+
+    if (isNight && nightStart === null) {
+      nightStart = i;
+    } else if (!isNight && nightStart !== null) {
+      annotations[`night${nightStart}`] = {
+        type: 'box',
+        xMin: nightStart - 0.5,
+        xMax: i - 0.5,
+        backgroundColor: 'rgba(30, 40, 80, 0.08)',
+        borderWidth: 0,
+      };
+      nightStart = null;
+    }
+  });
+
+  // Close final night period
+  if (nightStart !== null) {
+    annotations[`night${nightStart}`] = {
+      type: 'box',
+      xMin: nightStart - 0.5,
+      xMax: labels.length - 0.5,
+      backgroundColor: 'rgba(30, 40, 80, 0.08)',
+      borderWidth: 0,
+    };
+  }
+
+  return annotations;
+}
+
+// Filter data by time range
+function filterByTimeRange(data) {
+  const days = parseInt(document.getElementById('time-range').value);
+  if (days === 0) return data;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return data.filter(d => new Date(d.alertDate) >= cutoff);
+}
+
+// Update chart
+function updateChart() {
+  const groupBy = document.getElementById('group-by').value;
+  const timeFilteredData = filterByTimeRange(allData);
+
+  // Filter by selected regions
+  let regionData = timeFilteredData;
+  if (selectedRegions.size > 0) {
+    regionData = timeFilteredData.filter(d => selectedRegions.has(d.data));
+  }
+
+  // Heatmap mode
+  if (groupBy === 'heatmap') {
+    document.getElementById('chart-wrapper').style.display = 'none';
+    document.getElementById('heatmap-wrapper').style.display = 'block';
+    renderHeatmap(regionData);
+    // Update stats for heatmap
+    document.getElementById('stat-total').textContent = regionData.length.toLocaleString();
+    const days = new Set(regionData.map(d => d.alertDate.split('T')[0])).size;
+    document.getElementById('stat-days').textContent = days;
+    document.getElementById('stat-peak').textContent = '-';
+    document.getElementById('stat-avg').textContent = days > 0 ? (regionData.length / days).toFixed(1) : 0;
+    // Hide stats when multiple regions selected
+    const showStats = regionData.length > 0 && selectedRegions.size <= 1;
+    document.getElementById('stats').style.display = showStats ? 'grid' : 'none';
+    return;
+  }
+
+  document.getElementById('chart-wrapper').style.display = 'block';
+  document.getElementById('heatmap-wrapper').style.display = 'none';
+
+  // Build labels from data
+  let labels;
+  if (groupBy === 'day') {
+    const allDates = new Set(timeFilteredData.map(d => d.alertDate.split('T')[0]));
+    labels = [...allDates].sort();
+  } else {
+    // day+hour labels from data
+    const allHours = new Set(timeFilteredData.map(d => {
+      const date = new Date(d.alertDate);
+      const day = date.toISOString().split('T')[0];
+      const hour = date.getHours().toString().padStart(2, '0');
+      return `${day} ${hour}:00`;
+    }));
+    labels = [...allHours].sort();
+  }
+
+  // Build datasets - one per region, or one for all if none selected
+  let datasets = [];
+  let totalAlerts = 0;
+  const isBar = groupBy === 'hour';
+
+  function makeDataset(label, values, color) {
+    const base = { label, data: values, borderColor: color.border };
+    if (isBar) {
+      return { ...base, backgroundColor: color.border.replace('rgb', 'rgba').replace(')', ', 0.7)') };
+    } else {
+      return { ...base, backgroundColor: color.bg, fill: false, tension: 0.1, pointRadius: 3, pointHoverRadius: 5 };
+    }
+  }
+
+  if (selectedRegions.size > 0) {
+    [...selectedRegions].forEach((region, i) => {
+      const regionData = timeFilteredData.filter(d => d.data === region);
+      const grouped = groupData(regionData, groupBy);
+      const values = labels.map(l => grouped[l] || 0);
+      totalAlerts += values.reduce((a, b) => a + b, 0);
+      datasets.push(makeDataset(region, values, COLORS[i % COLORS.length]));
+    });
+  } else {
+    const grouped = groupData(timeFilteredData, groupBy);
+    const values = labels.map(l => grouped[l] || 0);
+    totalAlerts = values.reduce((a, b) => a + b, 0);
+    datasets.push(makeDataset('כל האזורים', values, COLORS[0]));
+  }
+
+  // Update stats
+  const allValues = datasets.flatMap(ds => ds.data);
+  const daysWithAlerts = allValues.filter(v => v > 0).length;
+  const peak = Math.max(...allValues, 0);
+  const avg = daysWithAlerts > 0 ? (totalAlerts / labels.length).toFixed(1) : 0;
+
+  document.getElementById('stat-total').textContent = totalAlerts.toLocaleString();
+  document.getElementById('stat-days').textContent = daysWithAlerts;
+  document.getElementById('stat-peak').textContent = peak.toLocaleString();
+  document.getElementById('stat-avg').textContent = avg;
+  // Hide stats when multiple regions selected (not useful for comparison)
+  const showStats = totalAlerts > 0 && selectedRegions.size <= 1;
+  document.getElementById('stats').style.display = showStats ? 'grid' : 'none';
+
+  // Update chart title
+  document.getElementById('chart-title').textContent =
+    `התרעות - תצוגה ${groupBy === 'day' ? 'יומית' : 'שעתית'}`;
+
+  // Generate day/night annotations
+  const annotations = generateDayNightAnnotations(labels, groupBy);
+
+  // Chart type: bar for hourly, line for daily
+  const chartType = groupBy === 'hour' ? 'bar' : 'line';
+
+  // Create/update chart (must recreate if type changes)
+  const ctx = document.getElementById('main-chart').getContext('2d');
+
+  if (mainChart && mainChart.config.type !== chartType) {
+    mainChart.destroy();
+    mainChart = null;
+  }
+
+  if (mainChart) {
+    mainChart.data.labels = labels;
+    mainChart.data.datasets = datasets;
+    mainChart.options.plugins.annotation.annotations = annotations;
+    mainChart.update();
+  } else {
+    mainChart = new Chart(ctx, {
+      type: chartType,
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            rtl: true,
+          },
+          annotation: {
+            annotations: annotations
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Query string helpers
+function updateQueryString() {
+  const params = new URLSearchParams();
+  if (selectedRegions.size > 0) {
+    params.set('regions', [...selectedRegions].join(','));
+  }
+  const groupBy = document.getElementById('group-by').value;
+  if (groupBy !== 'day') {
+    params.set('view', groupBy);
+  }
+  const range = document.getElementById('time-range').value;
+  if (range !== '7') {
+    params.set('range', range);
+  }
+  const qs = params.toString();
+  const newUrl = qs ? `${location.pathname}?${qs}` : location.pathname;
+  history.replaceState(null, '', newUrl);
+}
+
+function loadFromQueryString() {
+  const params = new URLSearchParams(location.search);
+  const regions = params.get('regions');
+  if (regions) {
+    regions.split(',').forEach(r => selectedRegions.add(r));
+  }
+  const view = params.get('view');
+  if (view) {
+    document.getElementById('group-by').value = view;
+  }
+  const range = params.get('range');
+  if (range) {
+    document.getElementById('time-range').value = range;
+  }
+}
+
+// Render selected regions
+function renderSelectedRegions() {
+  const container = document.getElementById('selected-regions');
+  container.innerHTML = '';
+
+  selectedRegions.forEach(region => {
+    const tag = document.createElement('div');
+    tag.className = 'region-tag';
+    tag.innerHTML = `${region}<button onclick="removeRegion('${region.replace(/'/g, "\\'")}')">&times;</button>`;
+    container.appendChild(tag);
+  });
+}
+
+function addRegion(region) {
+  if (region && !selectedRegions.has(region)) {
+    selectedRegions.add(region);
+    updateQueryString();
+    renderSelectedRegions();
+    updateChart();
+  }
+  document.getElementById('region-input').value = '';
+  hideAutocomplete();
+}
+
+function removeRegion(region) {
+  selectedRegions.delete(region);
+  updateQueryString();
+  renderSelectedRegions();
+  updateChart();
+}
+
+// Autocomplete
+// Normalize string for fuzzy matching (remove dashes, collapse spaces)
+function normalize(str) {
+  return str.replace(/[-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function showAutocomplete(query) {
+  const list = document.getElementById('autocomplete-list');
+
+  if (!query || query.length < 1) {
+    hideAutocomplete();
+    return;
+  }
+
+  const normQuery = normalize(query);
+  const matches = allLocations
+    .filter(loc => normalize(loc).includes(normQuery) && !selectedRegions.has(loc))
+    .slice(0, 15);
+
+  if (matches.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  list.innerHTML = matches.map((loc, i) =>
+    `<div class="autocomplete-item${i === autocompleteIndex ? ' selected' : ''}" data-value="${loc}">${loc}</div>`
+  ).join('');
+
+  list.classList.add('visible');
+
+  list.querySelectorAll('.autocomplete-item').forEach(item => {
+    item.addEventListener('click', () => addRegion(item.dataset.value));
+  });
+}
+
+function hideAutocomplete() {
+  document.getElementById('autocomplete-list').classList.remove('visible');
+  autocompleteIndex = -1;
+}
+
+// Event listeners
+document.getElementById('region-input').addEventListener('input', (e) => {
+  autocompleteIndex = -1;
+  showAutocomplete(e.target.value);
+});
+
+document.getElementById('region-input').addEventListener('keydown', (e) => {
+  const list = document.getElementById('autocomplete-list');
+  const items = list.querySelectorAll('.autocomplete-item');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    autocompleteIndex = Math.min(autocompleteIndex + 1, items.length - 1);
+    showAutocomplete(e.target.value);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    autocompleteIndex = Math.max(autocompleteIndex - 1, -1);
+    showAutocomplete(e.target.value);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (autocompleteIndex >= 0 && items[autocompleteIndex]) {
+      addRegion(items[autocompleteIndex].dataset.value);
+    }
+  } else if (e.key === 'Escape') {
+    hideAutocomplete();
+  }
+});
+
+document.getElementById('region-input').addEventListener('blur', () => {
+  setTimeout(hideAutocomplete, 150);
+});
+
+document.getElementById('time-range').addEventListener('change', () => { updateChart(); updateQueryString(); });
+document.getElementById('group-by').addEventListener('change', () => { updateChart(); updateQueryString(); });
+document.getElementById('refresh-btn').addEventListener('click', fetchData);
+
+// Initial load
+loadFromQueryString();
+renderSelectedRegions();
+fetchData();
+</script>
+</body>
+</html>
