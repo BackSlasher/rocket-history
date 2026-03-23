@@ -200,6 +200,8 @@ canvas { max-height: 400px; }
 
   <div class="loading" id="loading">טוען נתונים...</div>
 
+  <div id="data-range" style="text-align:center;font-size:13px;color:#666;margin-top:20px;"></div>
+
   <footer style="margin-top:32px;padding-top:16px;border-top:1px solid #ddd;font-size:12px;color:#888;text-align:center;">
     נתונים מ-<a href="https://oref-map.org" target="_blank" style="color:#666;">oref-map.org</a> ·
     מקור: <a href="https://www.oref.org.il" target="_blank" style="color:#666;">פיקוד העורף</a>
@@ -269,6 +271,12 @@ async function fetchData() {
 
     // Extract unique locations
     allLocations = [...new Set(allData.map(d => d.data))].sort((a, b) => a.localeCompare(b, 'he'));
+
+    // Show data range
+    const dates = allData.map(d => d.alertDate.split('T')[0]).sort();
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+    document.getElementById('data-range').textContent = `נתונים מ-${minDate} עד ${maxDate}`;
 
     document.getElementById('loading').style.display = 'none';
     updateChart();
