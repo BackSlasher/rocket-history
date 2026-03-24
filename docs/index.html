@@ -289,20 +289,20 @@ async function fetchData() {
 }
 
 // Group data by day or hour
+// Note: alertDate is in Israel time (from source), we parse strings directly to avoid TZ issues
 function groupData(data, groupBy) {
   const groups = {};
 
   data.forEach(item => {
-    const date = new Date(item.alertDate);
+    const [datePart, timePart] = item.alertDate.split('T');
     let key;
 
     if (groupBy === 'day') {
-      key = date.toISOString().split('T')[0];
+      key = datePart;
     } else {
       // day + hour: "2026-03-20 14:00"
-      const day = date.toISOString().split('T')[0];
-      const hour = date.getHours().toString().padStart(2, '0');
-      key = `${day} ${hour}:00`;
+      const hour = timePart.split(':')[0];
+      key = `${datePart} ${hour}:00`;
     }
 
     groups[key] = (groups[key] || 0) + 1;
@@ -527,7 +527,7 @@ function updateChart() {
   document.getElementById('chart-wrapper').style.display = 'block';
   document.getElementById('heatmap-wrapper').style.display = 'none';
 
-  // Build labels from data
+  // Build labels from data (use alertDate string directly to avoid timezone issues)
   let labels;
   if (groupBy === 'day') {
     const allDates = new Set(timeFilteredData.map(d => d.alertDate.split('T')[0]));
@@ -535,10 +535,9 @@ function updateChart() {
   } else {
     // day+hour labels from data
     const allHours = new Set(timeFilteredData.map(d => {
-      const date = new Date(d.alertDate);
-      const day = date.toISOString().split('T')[0];
-      const hour = date.getHours().toString().padStart(2, '0');
-      return `${day} ${hour}:00`;
+      const [datePart, timePart] = d.alertDate.split('T');
+      const hour = timePart.split(':')[0];
+      return `${datePart} ${hour}:00`;
     }));
     labels = [...allHours].sort();
   }

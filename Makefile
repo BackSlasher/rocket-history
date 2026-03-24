@@ -1,4 +1,4 @@
-.PHONY: fetch-data update-index update
+.PHONY: fetch-data update-index update serve
 
 # Fetch data and update index
 update: fetch-data update-index
@@ -25,3 +25,6 @@ update-index:
 		' docs/index.html > docs/index.html.tmp && mv docs/index.html.tmp docs/index.html; \
 		echo "Updated DAY_FILES in index.html"; \
 	fi
+
+serve:
+	cd docs && python -m http.server
