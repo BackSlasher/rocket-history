@@ -4,8 +4,13 @@
 update: fetch-data update-index
 
 # Fetch missing day files for the past 30 days
+# Today's file is always re-downloaded (may have changed); past days are skipped if they exist
 fetch-data:
-	@for i in $$(seq 0 30); do \
+	@date=$$(date +%Y-%m-%d); \
+	file="docs/day-$$date.json"; \
+	echo "Fetching $$date (today)..."; \
+	curl -sf "https://oref-map.org/api/day-history?date=$$date" -o "$$file" || rm -f "$$file"
+	@for i in $$(seq 1 30); do \
 		date=$$(date -d "today - $$i days" +%Y-%m-%d); \
 		file="docs/day-$$date.json"; \
 		if [ ! -f "$$file" ]; then \
